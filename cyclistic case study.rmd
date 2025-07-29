@@ -1,0 +1,190 @@
+---
+title: '"Cyclistic case study"'
+author: "rishi"
+date: "2025-07-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1.Business Need
+
+Cyclistic, a bike-share company in Chicago, aims to maximize the number of annual memberships, as finance analysts have determined that annual members are significantly more profitable than casual riders. The marketing director, Lily Moreno, believes there's a strong opportunity to convert existing casual riders into annual members rather than solely targeting new customers
+
+*business goal*
+Converting Casual Riders to Annual Members 
+
+# 2. Data Preparation
+```{r load-and-clean}
+library(tidyverse)
+library(conflicted)
+
+ ** load data
+q1_2019 <- read_csv("Divvy_Trips_2019_Q1.csv")
+q1_2020 <- read_csv("Divvy_Trips_2020_Q1.csv")
+
+** clean colum name
+colnames(q1_2019)
+colnames(q1_2020)
+
+# 3.Data Inspection and Initial Cleaning
+
+** clean colum name
+colnames(q1_2019)
+colnames(q1_2020)
+
+** Rename columns 
+(q1_2019 <- rename(q1_2019
+                   ,ride_id = trip_id
+                   ,rideable_type = bikeid
+                   ,started_at = start_time
+                   ,ended_at = end_time
+                   ,start_station_name = from_station_name
+                   ,start_station_id = from_station_id
+                   ,end_station_name = to_station_name
+                   ,end_station_id = to_station_id
+                   ,member_casual = usertype
+))
+
+** Check the structure of the dataframes
+str(q1_2019)
+str(q1_2020)
+
+** Convert ride_id and rideable_type to character in q1_2019
+q1_2019 <- mutate(q1_2019, ride_id = as.character(ride_id),
+                             rideable_type = as.character(rideable_type))
+
+** Calculate ride_length (in minutes) and day_of_week for q1_2020
+q1_2020 <- q1_2020 %>%
+  mutate(ride_length = as.numeric(difftime(ended_at, started_at, units = "mins")),
+         day_of_week = wday(started_at, label = TRUE))
+
+# 4. Combining Data and removeing columns
+
+** Combine the two dataframes into a single one
+all_trips <- bind_rows(q1_2019, q1_2020)
+
+** Remove irrelevant columns
+all_trips <- all_trips %>%
+  select(-c(start_lat, start_lng, end_lat, end_lng, birthyear, gender, "tripduration"))
+
+# 5. Further Data Inspection and Cleaning
+
+** Display column names of the combined dataframe
+colnames(all_trips)
+
+** Check the number of rows and dimensions
+nrow(all_trips)
+dim(all_trips)
+
+** View the head and tail of the dataframe
+head(all_trips)
+tail(all_trips)
+
+** Check the structure of the combined dataframe
+str(all_trips)
+
+** Get a summary of the combined dataframe
+summary(all_trips)
+
+** Recode the 'member_casual' column for consistency
+all_trips <- all_trips %>%
+  mutate(member_casual = recode(member_casual,
+                                "Subscriber" = "member",
+                                "Customer" = "casual"))
+
+** Display the unique values in the recoded column
+(all_trips$member_casual)
+
+** Extract date, month, day, year, and day of week
+all_trips$date <- as.Date(all_trips$started_at)
+all_trips$month <- format(as.Date(all_trips$date), "%m")
+all_trips$day <- format(as.Date(all_trips$date), "%d")
+all_trips$year <- format(as.Date(all_trips$date), "%y")
+all_trips$day_of_week <- format(as.Date(all_trips$date), "%A")
+
+** Recalculate ride_length to ensure it's based on the difference between end and start times
+all_trips$ride_length <- difftime(all_trips$ended_at, all_trips$started_at)
+
+** Check the structure and values of ride_length
+str(all_trips)
+(all_trips$ride_length)
+
+** Convert ride_length to numeric
+all_trips$ride_length <- as.numeric(as.character(all_trips$ride_length))
+is.numeric(all_trips$ride_length)
+
+** Remove rides with negative ride_length or starting at "HQ QR"
+all_trips_v2 <- all_trips[!(all_trips$start_station_name == "HQ QR" | all_trips$ride_length < 0),]
+
+# 6. Descriptive Analysis
+
+** Calculate basic descriptive statistics for ride_length
+mean(all_trips_v2$ride_length)
+median(all_trips_v2$ride_length)
+max(all_trips_v2$ride_length)
+min(all_trips_v2$ride_length)
+
+ ** Compare members and casual users on ride_length
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = mean)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = median)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = max)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = min)
+
+
+** See the average ride time by each day for members vs casual users
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+
+
+# 7. Visualization
+
+** Visualize the number of rides by weekday and member type
+all_trips_v2 %>%
+  mutate(weekday = wday(started_at, label = TRUE)) %>%
+  group_by(member_casual, weekday) %>%
+  summarise(number_of_rides = n(),
+            average_duration = mean(ride_length)) %>%
+  arrange(member_casual, weekday) %>%
+  ggplot(aes(x = weekday, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  labs(title = "Number of Rides by Day of Week and Rider Type",
+       x = "Day of Week",
+       y = "Number of Rides",
+       fill = "Rider Type") +
+  theme_minimal()
+
+** Visualize the average ride duration by weekday and member type in bar chart
+all_trips_v2 %>%
+  mutate(weekday = wday(started_at, label = TRUE)) %>%
+  group_by(member_casual, weekday) %>%
+  summarise(number_of_rides = n(),
+            average_duration = mean(ride_length)) %>%
+  arrange(member_casual, weekday) %>%
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  labs(title = "Average Ride Duration by Day of Week and Rider Type",
+       x = "Day of Week",
+       y = "Average Ride Duration (seconds)",
+       fill = "Rider Type") +
+  theme_minimal()
+```
+Here are the "Key Insights," "Recommendations," and "Final Thoughts" sections for your Cyclistic case study, formatted similarly to your example:
+
+
+
+# 8. Recommendations for Cyclistic
+
+1.  **Target Weekend Casual Riders with Membership Incentives:** Focus marketing efforts on casual riders who frequently use bikes on weekends, perhaps offering weekend-specific membership trial discounts or bundles.
+2.  **Highlight Cost Savings for Longer Rides:** Emphasize the financial benefits of an annual membership for longer rides, appealing to casual riders who take extended trips.
+3.  **Promote Weekday Commuting Benefits:** Develop campaigns that showcase the convenience and efficiency of Cyclistic for weekday commutes, aiming to convert casual riders who might occasionally use the service for this purpose.
+4.  **Leverage Digital Media for Targeted Messaging:** Use social media and email marketing to share success stories of casual riders who converted to members, highlighting the perks and savings they now enjoy.
+
+---
+
+# 9. Final Thoughts
+
+By understanding the distinct usage patterns of casual riders and annual members, Cyclistic can develop targeted marketing strategies. [cite_start]These insights, derived from historical trip data, provide a data-driven foundation for converting casual riders into more profitable annual members, ultimately contributing to Cyclistic's future growth[cite: 2].
+
+
